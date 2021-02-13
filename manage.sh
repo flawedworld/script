@@ -70,19 +70,23 @@ aosp_forks=(
 )
 
 declare -A kernels=(
-    [google_crosshatch]=android-11.0.0_r0.53 # February 2021
     [google_crosshatch_drivers_staging_qcacld-3.0]=android-11.0.0_r0.53 # February 2021
     [google_crosshatch_techpack_audio]=android-11.0.0_r0.53 # February 2021
-    [google_coral]=android-11.0.0_r0.54 # February 2021
     [google_coral_drivers_staging_qcacld-3.0]=android-11.0.0_r0.54 # February 2021
     [google_coral_techpack_audio]=android-11.0.0_r0.54 # February 2021
-    [google_sunfish]=android-11.0.0_r0.55 # February 2021
     [google_sunfish_drivers_staging_qcacld-3.0]=android-11.0.0_r0.55 # February 2021
     [google_sunfish_techpack_audio]=android-11.0.0_r0.55 # February 2021
-    [google_redbull]=android-11.0.0_r0.56 # February 2021
     [google_redbull_drivers_staging_qcacld-3.0]=android-11.0.0_r0.56 # February 2021
     [google_redbull_techpack_audio]=android-11.0.0_r0.56 # February 2021
+)
+
+# Items here must be in their reversed recursive order. See redbull repos below as an example.
+declare -A kernel_with_gitmodule_updates=(
+    [google_crosshatch]=android-11.0.0_r0.53 # February 2021
+    [google_coral]=android-11.0.0_r0.54 # February 2021
+    [google_sunfish]=android-11.0.0_r0.55 # February 2021
     [google_redbull_arch_arm64_boot_dts_vendor]=android-11.0.0_r0.56 # February 2021
+    [google_redbull]=android-11.0.0_r0.56 # February 2021
 )
 
 independent=(
@@ -143,6 +147,43 @@ for repo in "${aosp_forks[@]}"; do
         git fetch upstream --tags
 
         git pull --rebase upstream $aosp_tag
+        git push -f
+    fi
+
+    cd ..
+done
+
+for kernel in ${!kernel_gitmodule_updates[@]}; do
+    echo -e "\n>>> $(tput setaf 3)Handling kernel_$kernel$(tput sgr0)"
+
+    cd kernel_$kernel
+    git checkout $branch
+
+    if [[ -n $DELETE_TAG ]]; then
+        git tag -d $DELETE_TAG
+        git push origin :refs/tags/$DELETE_TAG
+        cd ..
+        continue
+    fi
+
+    if [[ -n $build_number ]]; then
+        git tag -s $aosp_version.$build_number -m $aosp_version.$build_number
+        git push origin $aosp_version.$build_number
+    else
+        git fetch upstream --tags
+        kernel_tag=${kernels[$kernel]}
+        if [[ -z $kernel_tag ]]; then
+            cd ..
+            continue
+        fi
+
+        git checkout $branch
+
+        git submodule foreach git pull origin
+        git add .
+        git commit -m "Update git submodules for $kernel_tag update"
+
+        git rebase $kernel_tag
         git push -f
     fi
 
